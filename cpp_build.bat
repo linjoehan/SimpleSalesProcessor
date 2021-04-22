@@ -13,7 +13,6 @@ g++.exe ^
 cpp_solution/src/main.cpp ^
 -static-libgcc ^
 -static-libstdc++ ^
--lgdi32 ^
 -o cpp_solution/bin/SimpleSalesProcessor.exe
 
 pause
