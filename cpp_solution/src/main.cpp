@@ -2,6 +2,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <sstream>
 #include <windows.h>
 
 #include "libpq-fe.h"
@@ -56,6 +57,139 @@ int move_file(std::string filepath,std::string filename,std::string move_type)
     return res;
 }
 
+int count_delimiters(std::string line,char delim)
+{
+    int res = 0;
+    for(unsigned i = 0;i<line.size();i++)
+    {
+        if(line[i] == delim)
+        {
+            res++;
+        }
+    }
+    return res;
+}
+
+//Reference https://stackoverflow.com/questions/2602013/read-whole-ascii-file-into-c-stdstring
+std::string load_sql_from_file(std::string file)
+{
+    std::ifstream infile;
+    infile.open(file);
+    if(infile.is_open())
+    {
+        std::stringstream ss;
+        ss << infile.rdbuf();
+        return ss.str();
+    }
+}
+
+//Reference: https://stackoverflow.com/questions/3418231/replace-part-of-a-string-with-another-string
+std::string replace(const std::string& str, const std::string& from, const std::string& to) 
+{
+    std::string res = str;
+    size_t start_pos = res.find(from);
+    while(start_pos != std::string::npos)
+    {
+        res.replace(start_pos, from.length(), to);
+        start_pos = res.find(from);
+    }
+    return res;
+}
+
+std::string get_full_path()
+{
+    char buffer[MAX_PATH];
+    GetModuleFileName(NULL,buffer,sizeof(buffer));
+    std::string res = std::string(buffer);
+    
+    //Change slash direction
+    res = replace(res,"\\","/");
+    return res;
+}
+
+void process_region_files(PGconn *conn)
+{
+    std::string file_path = "./Data/Region/";
+    std::vector<std::string> files = get_all_files_names_within_folder(file_path);
+    std::cout << "Region files:" << files.size() << std::endl;
+    
+    for(int i = 0;i<files.size();i++)
+    {
+        std::ifstream filestream;
+        filestream.open(file_path+files[i]);
+        std::string line;
+        
+        bool verify_header = false;
+        bool verify_records = true;
+        bool verify_processed = true;
+        
+        PGresult *res = NULL;
+        std::string sql;
+            
+        if(filestream.is_open())
+        {
+            //Validate file header (first line)
+            std::getline(filestream,line);
+            verify_header = line == "Region,RegionDescription,StartDate,EndDate";
+            
+            //Validate file delimiters
+            if(verify_header)
+            {
+                while(std::getline(filestream,line) and verify_records)
+                {
+                    int delimiters = count_delimiters(line,',');
+                    verify_records = delimiters == 3;
+                }
+            }
+        }
+        filestream.close();
+        
+        //Process file into database raw
+        if(verify_header and verify_records and verify_processed) 
+        {
+            //Process file to raw database table
+            sql = load_sql_from_file("./sql/raw_region.sql");
+            
+            //Workaround to use copy with absolute path as relative path is not supported
+            std::string full_file_name = replace(get_full_path(),"/cpp_solution/bin/SimpleSalesProcessor.exe","") + replace(file_path,".","") + files[i];
+            
+            sql = replace(sql,"%filename%",full_file_name);
+            
+            res = PQexec(conn,sql.c_str());
+            if(PQresultStatus(res) != PGRES_COMMAND_OK)
+            {
+                std::cerr << "Could not Exceute sql query: " << PQresultErrorMessage(res);
+                verify_processed = false;
+            }
+            
+            //Other data verifications on the raw data
+        }
+        
+        //Process file into database raw
+        if(verify_header and verify_records and verify_processed)
+        {
+            //Load the raw data into the main table and remove the raw data table
+            sql = load_sql_from_file("./sql/raw_to_tbl_region.sql");
+            res = PQexec(conn,sql.c_str());
+            if(PQresultStatus(res) != PGRES_COMMAND_OK)
+            {
+                std::cerr << "Could not Exceute sql query: " << PQresultErrorMessage(res);
+                verify_processed = false;
+            }
+        }
+        
+        //archive or reject the processed file
+        if(verify_header and verify_records and verify_processed)
+        {
+            move_file(file_path,files[i],"archive");
+        }
+        else
+        {
+            move_file(file_path,files[i],"reject");
+        }
+        
+    }
+}
 
 int main()
 {
@@ -73,17 +207,9 @@ int main()
         return -1;
     }
     
-    std::cout << "Sucessfully connected to database" << std::endl;
-    
     //Process all Region data files
-    std::string file_path = "./Data/Region/";
-    std::vector<std::string> files = get_all_files_names_within_folder(file_path);
-    std::cout << "Region files:" << files.size() << std::endl;
+    process_region_files(conn);
     
-    if(files.size() > 0)
-    {
-        move_file(file_path,files[0],"archive");
-    }
     
     PQfinish(conn);
     

@@ -12,7 +12,7 @@ create table ref_region
   start_date date not null,
   end_date date not null,
   primary key(id),
-  unique (region,start_date)
+  constraint uq_ref_region_region_start_date unique (region,start_date)
 );
 
 drop table if exists sales cascade;
