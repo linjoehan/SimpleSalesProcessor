@@ -19,7 +19,7 @@ def move_file(filepath,filename,move_type):
   
   existing_file = filepath+filename
   target_file = target_path+filename
-  #os.replace(existing_file,target_file)
+  os.replace(existing_file,target_file)
   return
 
 def count_delimiters(line,delim):
@@ -167,23 +167,30 @@ def run_sales_summary_report(conn):
   sql = load_sql_from_file("./sql/sales_summary_report.sql")
   cur = conn.cursor()
   try:
-    cur.exceute(sql)
-  except:
+    cur.execute(sql)
+  except Exception as err:
     print("Could not Exceute sql query:",sql)
     report_sucess = False
   
   if report_sucess:
-    #reportfile = open("./Data/Output/Sales_Summary_Report.txt","w")
+    reportfile = open("./Data/Output/Sales_Summary_Report.txt","w")
     colnames = [desc[0] for desc in cur.description]
     data = cur.fetchall()
-    print(colnames)
-    print(data)
-    #reportfile.close()
+    reportfile.write(",".join(colnames))
+    reportfile.write("\n")
+    for item in data:
+      for i in range(len(item)):
+        if i != 0:
+          reportfile.write(",")
+        if item[i] != None:
+          reportfile.write(str(item[i]))
+      reportfile.write("\n")
+    reportfile.close()
   
   cur.close()
   return
     
-  
+
 conn = psycopg2.connect(database="simplesalesprocessor")
 process_region_files(conn)
 process_sales_files(conn)
