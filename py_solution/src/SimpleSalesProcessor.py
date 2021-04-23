@@ -22,10 +22,21 @@ def move_file(filepath,filename,move_type):
   os.replace(existing_file,target_file)
   return
 
+def count_delimiters(line,delim):
+  return line.count(delim)
 
+def load_sql_from_file(file):
+  infile = open(file, "r")
+  filestr = infile.read()
+  infile.close()
+  return filestr
+
+  
+  
 conn = psycopg2.connect(database="simplesalesprocessor")
 conn.close()
 
-files = get_all_files_names_within_folder("./Data/Sales/")
-move_file("./Data/Sales/",files[0],"archive")
-print(files)
+sqlfile = "./sql/raw_region.sql"
+sql = load_sql_from_file(sqlfile)
+
+print(sql)
