@@ -1,3 +1,5 @@
+call py_setup.bat
+
 if not exist "Data" mkdir "Data"
 if not exist "Data/Archive" mkdir "Data/Archive"
 if not exist "Data/Output" mkdir "Data/Output"
