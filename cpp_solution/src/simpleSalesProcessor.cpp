@@ -284,6 +284,59 @@ void process_sales_files(PGconn *conn)
     }
 }
 
+void run_sales_summary_report(PGconn *conn)
+{
+    std::cout << "Running Sales Summary report..." <<std::endl;
+    
+    PGresult *res = NULL;
+    std::string sql;
+    
+    sql = load_sql_from_file("./sql/sales_summary_report.sql");
+    res = PQexec(conn,sql.c_str());
+    
+    if(PQresultStatus(res) != PGRES_TUPLES_OK)
+    {
+        std::cerr << "Could not Exceute sql query: " << PQresultErrorMessage(res);
+        std::cout << " FAILED" << std::endl;
+    }
+    else
+    {
+        std::string filename = "./Data/Output/Sales_Summary_Report.txt";
+        std::ofstream reportfile;
+        reportfile.open(filename , std::ofstream::trunc);
+        
+        if(reportfile.is_open())
+        {
+            int result_rows = PQntuples(res);
+            int result_cols = PQnfields(res);
+            
+            //Write column headers
+            for(int col = 0;col < result_cols;col++)
+            {
+                reportfile << (col==0 ? "" : ",") << PQfname(res,col);
+            }
+            reportfile << std::endl;
+            
+            for(int row = 0;row<result_rows;row++)
+            {
+                for(int col = 0;col<result_cols;col++)
+                {
+                    reportfile << (col==0 ? "" : ",") << PQgetvalue(res,row,col);
+                }
+                reportfile << std::endl;
+            }
+            
+            reportfile.close();
+            std::cout << " DONE" <<std::endl;
+        }
+        else
+        {
+            std::cerr << "Could not write to file " << filename << std::endl;
+            std::cout << " FAILED" << std::endl;
+        }
+    }
+}
+
 int main()
 {
     //Establish connection to database
@@ -304,11 +357,12 @@ int main()
     process_region_files(conn);
     process_sales_files(conn);
     
-    PQfinish(conn);
+    //Output latest report
+    run_sales_summary_report(conn);
     
+    PQfinish(conn);
     
     return 0;
 }
-
 
 
