@@ -14,7 +14,7 @@ copy .\cpp_solution\extern_libs\postgresql\lib\*.dll .\cpp_solution\bin\
 
 g++.exe ^
 -I"./cpp_solution/extern_libs/postgresql/include" ^
-cpp_solution/src/main.cpp ^
+cpp_solution/src/simpleSalesprocessor.cpp ^
 -static-libgcc ^
 -static-libstdc++ ^
 -L"./cpp_solution/extern_libs/postgresql/lib/" ^

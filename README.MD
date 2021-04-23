@@ -10,7 +10,7 @@ postgresql-9.6.21-2-windows-x64.exe --install_runtimes 0
 
 Mingw install guide
 https://www.ics.uci.edu/~pattis/common/handouts/mingweclipse/mingw.html
-https://nuwen.net/mingw.html For C++17 features
+https://nuwen.net/mingw.html for 64bit
 
 Python install guide
 https://www.tutorialspoint.com/python/python_environment.htm

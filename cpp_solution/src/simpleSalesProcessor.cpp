@@ -29,6 +29,7 @@ std::vector<std::string> get_all_files_names_within_folder(std::string folder)
 }
 
 //Move rejected file to rejected folder or completed file to archive folder
+//Note that this will replace files if they are named the same
 int move_file(std::string filepath,std::string filename,std::string move_type)
 {
     std::string target_path;
@@ -48,7 +49,7 @@ int move_file(std::string filepath,std::string filename,std::string move_type)
     const std::string existing_file = filepath+filename;
     const std::string target_file = target_path+filename;
     
-    int res = MoveFile(existing_file.c_str(),target_file.c_str());
+    int res = MoveFileEx(existing_file.c_str(),target_file.c_str(),MOVEFILE_REPLACE_EXISTING);
     if(res==0)
     {
         std::cerr << "Could not move file " << existing_file << " to " << target_file << std::endl;
@@ -111,10 +112,13 @@ void process_region_files(PGconn *conn)
 {
     std::string file_path = "./Data/Region/";
     std::vector<std::string> files = get_all_files_names_within_folder(file_path);
-    std::cout << "Region files:" << files.size() << std::endl;
+    
+    std::cout << "Region data files found:" << files.size() <<std::endl;
     
     for(int i = 0;i<files.size();i++)
     {
+        std::cout << "Processing " << files[i] << "..." <<std::endl;
+        
         std::ifstream filestream;
         filestream.open(file_path+files[i]);
         std::string line;
@@ -182,12 +186,101 @@ void process_region_files(PGconn *conn)
         if(verify_header and verify_records and verify_processed)
         {
             move_file(file_path,files[i],"archive");
+            std::cout << " DONE" << std::endl;
         }
         else
         {
             move_file(file_path,files[i],"reject");
+            std::cout << " FAILED" << std::endl;
+        }
+    }
+}
+
+void process_sales_files(PGconn *conn)
+{
+    std::string file_path = "./Data/Sales/";
+    std::vector<std::string> files = get_all_files_names_within_folder(file_path);
+    
+    std::cout << "Sales data files found:" << files.size() <<std::endl;
+    
+    for(int i = 0;i<files.size();i++)
+    {
+        std::cout << "Processing " << files[i] << "..." <<std::endl;
+        
+        std::ifstream filestream;
+        filestream.open(file_path+files[i]);
+        std::string line;
+        
+        bool verify_header = false;
+        bool verify_records = true;
+        bool verify_processed = true;
+        
+        PGresult *res = NULL;
+        std::string sql;
+            
+        if(filestream.is_open())
+        {
+            //Validate file header (first line)
+            std::getline(filestream,line);
+            verify_header = line == "identifier,Network,Region,Date,Product,Amount";
+            
+            //Validate file delimiters
+            if(verify_header)
+            {
+                while(std::getline(filestream,line) and verify_records)
+                {
+                    int delimiters = count_delimiters(line,',');
+                    verify_records = delimiters == 5;
+                }
+            }
+        }
+        filestream.close();
+        
+        //Process file into database raw
+        if(verify_header and verify_records and verify_processed) 
+        {
+            //Process file to raw database table
+            sql = load_sql_from_file("./sql/raw_sales.sql");
+            
+            //Workaround to use copy with absolute path as relative path is not supported
+            std::string full_file_name = replace(get_full_path(),"/cpp_solution/bin/SimpleSalesProcessor.exe","") + replace(file_path,".","") + files[i];
+            
+            sql = replace(sql,"%filename%",full_file_name);
+            
+            res = PQexec(conn,sql.c_str());
+            if(PQresultStatus(res) != PGRES_COMMAND_OK)
+            {
+                std::cerr << "Could not Exceute sql query: " << PQresultErrorMessage(res);
+                verify_processed = false;
+            }
+            
+            //Other data verifications on the raw data
         }
         
+        //Process file into database raw
+        if(verify_header and verify_records and verify_processed)
+        {
+            //Load the raw data into the main table and remove the raw data table
+            sql = load_sql_from_file("./sql/raw_to_tbl_sales.sql");
+            res = PQexec(conn,sql.c_str());
+            if(PQresultStatus(res) != PGRES_COMMAND_OK)
+            {
+                std::cerr << "Could not Exceute sql query: " << PQresultErrorMessage(res);
+                verify_processed = false;
+            }
+        }
+        
+        //archive or reject the processed file
+        if(verify_header and verify_records and verify_processed)
+        {
+            move_file(file_path,files[i],"archive");
+            std::cout << " DONE" << std::endl;
+        }
+        else
+        {
+            move_file(file_path,files[i],"reject");
+            std::cout << " FAILED" << std::endl;
+        }
     }
 }
 
@@ -202,14 +295,14 @@ int main()
     conn = PQconnectdb(conninfo);
     if(PQstatus(conn) != CONNECTION_OK)
     {
-        std::cout << "Connection to database failed:" << PQerrorMessage(conn) << std::endl;
+        std::cerr << "Connection to database failed:" << PQerrorMessage(conn) << std::endl;
         PQfinish(conn);
         return -1;
     }
     
     //Process all Region data files
     process_region_files(conn);
-    
+    process_sales_files(conn);
     
     PQfinish(conn);
     
