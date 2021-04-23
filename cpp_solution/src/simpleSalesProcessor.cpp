@@ -169,7 +169,7 @@ void process_region_files(PGconn *conn)
             //Other data verifications on the raw data
         }
         
-        //Process file into database raw
+        //Process file into database table
         if(verify_header and verify_records and verify_processed)
         {
             //Load the raw data into the main table and remove the raw data table
